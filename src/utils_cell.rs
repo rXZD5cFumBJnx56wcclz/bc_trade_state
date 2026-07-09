@@ -167,7 +167,12 @@ pub fn modify_positions(
                     position.set_is_active(false);
                 }
             } else {
-                position.avg_open_price = (order.price.unwrap() + position.avg_open_price) / 2.0;
+                position.avg_open_price = (if order.is_market() {
+                    cell.src[4]
+                } else {
+                    order.price.unwrap()
+                } + position.avg_open_price)
+                    / 2.0;
                 position.qty += order.qty;
                 cell.capital -= order.qty;
             }
@@ -310,6 +315,8 @@ pub fn order_create(
     signal: &Signal,
     src: &[f64],
     type_order: &str,
+    create_tp_order: bool,
+    create_sl_order: bool,
     is_reduce: bool,
 ) -> Order {
     let position_idx = position_idx(&s, signal);
@@ -325,7 +332,7 @@ pub fn order_create(
         s.leverage,
         price_limit,
         type_order.to_string(),
-        if position_not_created {
+        if position_not_created && create_tp_order {
             tp_sl_orders(
                 "tp",
                 &s.takeprofit,
@@ -340,7 +347,7 @@ pub fn order_create(
         } else {
             Default::default()
         },
-        if position_not_created {
+        if position_not_created && create_sl_order {
             tp_sl_orders(
                 "sl",
                 &s.stoploss,
@@ -394,6 +401,8 @@ pub fn orders_market_extern<'a>(
             &signals_ready_series[market_entry.as_str()],
             buffer.last().unwrap(),
             "market",
+            s.create_tp_sl_orders.tp_market,
+            s.create_tp_sl_orders.sl_market,
             false,
         ));
     }
@@ -407,6 +416,8 @@ pub fn orders_market_extern<'a>(
             &signals_ready_series[market_exit.as_str()],
             buffer.last().unwrap(),
             "market",
+            false,
+            false,
             true,
         ));
     }
@@ -431,6 +442,8 @@ pub fn orders_limit_extern<'a>(
             &signals_ready_series[limit_entry.0.as_str()],
             buffer.last().unwrap(),
             "limit",
+            s.create_tp_sl_orders.tp_limit,
+            s.create_tp_sl_orders.sl_limit,
             false,
         ));
     }
@@ -444,6 +457,8 @@ pub fn orders_limit_extern<'a>(
             &signals_ready_series[limit_exit.0.as_str()],
             buffer.last().unwrap(),
             "limit",
+            false,
+            false,
             true,
         ));
     }
@@ -468,6 +483,8 @@ pub fn orders_trigger_extern<'a>(
             &signals_ready_series[trigger_market_entry.0.as_str()],
             buffer.last().unwrap(),
             "market",
+            s.create_tp_sl_orders.tp_trigger_market,
+            s.create_tp_sl_orders.sl_trigger_market,
             false,
         ));
     }
@@ -481,6 +498,8 @@ pub fn orders_trigger_extern<'a>(
             &signals_ready_series[trigger_market_exit.0.as_str()],
             buffer.last().unwrap(),
             "market",
+            false,
+            false,
             true,
         ));
     }
@@ -494,6 +513,8 @@ pub fn orders_trigger_extern<'a>(
             &signals_ready_series[trigger_limit_entry.0.as_str()],
             buffer.last().unwrap(),
             "limit",
+            s.create_tp_sl_orders.tp_trigger_limit,
+            s.create_tp_sl_orders.sl_trigger_limit,
             false,
         ));
     }
@@ -507,6 +528,8 @@ pub fn orders_trigger_extern<'a>(
             &signals_ready_series[trigger_limit_exit.0.as_str()],
             buffer.last().unwrap(),
             "limit",
+            false,
+            false,
             false,
         ));
     }
@@ -765,6 +788,8 @@ mod tests {
                     &SIGNAL,
                     SRC_EL.as_slice(),
                     "limit",
+                    false,
+                    true,
                     false,
                 );
                 set_order_link_id(&mut bind);

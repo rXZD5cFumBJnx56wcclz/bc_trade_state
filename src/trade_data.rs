@@ -4,7 +4,7 @@ use std::marker::PhantomPinned;
 use std::pin::Pin;
 use std::ptr;
 
-use crate::{statistics::StatCollector, structs::StepCell, utils_cell::orders_create};
+use crate::{statistics::StatCollector, trade::StepCell, utils_cell::orders_create};
 use bc_indicators::main_trait::Indicator;
 use bc_orders_collectors::main_trait::OrderCollector;
 use bc_orders_collectors_gw::gw::{OrdersCollectors, OrdersCollectorsGateway};
@@ -39,6 +39,7 @@ impl<'a> GWValues<'a> {
         fa_signals_ready: &FA<SETTINGS_SIGNAL, Box<dyn SignalReady>>,
         fa_signals_train: &FA<SETTINGS_SIGNAL, Box<dyn SignalTrain>>,
         fa_orders_collectors: &FA<SETTINGS_ORDER_COLLECTOR, Box<dyn OrderCollector>>,
+        // transposed
         src: &[Vec<f64>],
     ) -> Self {
         let bind = Indicators::new(&s.indications, fa_indicators, src);
@@ -66,37 +67,42 @@ impl<'a> GWValues<'a> {
     }
 }
 
-pub struct TradeData<'a> {
+pub struct TradeData<'a, 'b> {
     pub gw_values: GWValues<'a>,
     pub indicators_gateway: IndicatorsGateway<'a>,
     pub signals_ready_gateway: SignalsReadyGateway<'a>,
     pub signals_train_gateway: SignalsTrainGateway<'a>,
     pub orders_collectors_gateway: OrdersCollectorsGateway,
     pub cell: RefCell<TradeCell>,
-    pub symbol: &'a str,
+    pub symbol: &'b str,
     pub s: &'a SETTINGS,
     _pin: PhantomPinned,
 }
 
-impl<'a> TradeData<'a> {
+impl<'a, 'b> TradeData<'a, 'b> {
     pub fn new(
-        src: &[Vec<f64>],
+        src: &mut Buffer,
         s: &'a SETTINGS,
-        symbol: &'a str,
+        symbol: &'b str,
         fa_indicators: &FA<SETTINGS_IND, Box<dyn Indicator>>,
         fa_signals_ready: &FA<SETTINGS_SIGNAL, Box<dyn SignalReady>>,
         fa_signals_train: &FA<SETTINGS_SIGNAL, Box<dyn SignalTrain>>,
         fa_orders_collectors: &FA<SETTINGS_ORDER_COLLECTOR, Box<dyn OrderCollector>>,
     ) -> Pin<Box<Self>> {
         let mut res = Box::pin(Self {
-            gw_values: GWValues::new(
-                s,
-                fa_indicators,
-                fa_signals_ready,
-                fa_signals_train,
-                fa_orders_collectors,
-                src,
-            ),
+            gw_values: {
+                src.transpose_set();
+                let bind = GWValues::new(
+                    s,
+                    fa_indicators,
+                    fa_signals_ready,
+                    fa_signals_train,
+                    fa_orders_collectors,
+                    src,
+                );
+                src.transpose_set();
+                bind
+            },
             cell: RefCell::new(TradeCell::new(
                 s.trade.capital,
                 src[src.len() - 1].to_vec(),
@@ -134,21 +140,24 @@ impl<'a> TradeData<'a> {
     }
     pub fn update(
         self: &Pin<Box<Self>>,
-        buffer: &Buffer,
+        buffer: &mut Buffer,
         stat_collector: Option<&mut StatCollector<'a>>,
     ) {
-        let buff_transposed = buffer.clone().transpose();
-        let indications = self.indicators_gateway.indications_series(&buff_transposed);
+        buffer.transpose_set();
+        let indications = self.indicators_gateway.indications_series(&buffer);
+        let signals_ready = &self
+            .signals_ready_gateway
+            .signals_series(&indications, &buffer);
+        buffer.transpose_set();
         let orders = orders_create(
             &self.s.trade,
             self.cell.borrow().borrow(),
             self.symbol,
             &indications,
-            &self
-                .signals_ready_gateway
-                .signals_series(&indications, &buff_transposed),
+            signals_ready,
             buffer.as_slice(),
         );
+        dbg!(&orders);
         self.as_ref().get_ref().cell.borrow_mut().step(
             buffer.as_slice().last().unwrap(),
             &buffer[buffer.len() - 2],
@@ -254,15 +263,25 @@ mod tests {
 
     use crate::prelude_tests::prelude::*;
 
-    static TD: LazyLock<fn() -> Pin<Box<TradeData<'static>>>> = LazyLock::new(|| {
-        || TradeData::new(&SRC_TRANSPOSE, &S, "", &FA_I(), &FA_R(), &FA_T(), &FA_O())
+    static TD: LazyLock<fn() -> Pin<Box<TradeData<'static, 'static>>>> = LazyLock::new(|| {
+        || {
+            TradeData::new(
+                &mut SRC.to_buff(),
+                &S,
+                "",
+                &FA_I(),
+                &FA_R(),
+                &FA_T(),
+                &FA_O(),
+            )
+        }
     });
 
     #[test]
     fn update_res_1() {
         let td = TD();
         let res = TD();
-        td.update(&SRC.to_buff(), None);
+        td.update(&mut SRC.to_buff(), None);
         let indications = res.indicators_gateway.indications_series(&SRC_TRANSPOSE);
         let orders = orders_create(
             &S.trade,

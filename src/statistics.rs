@@ -7,10 +7,10 @@ use bc_utils_lg::types::maps::MAP;
 use bc_utils_lg::{structs::settings::SETTINGS_TRADE, types::maps::MAP_LINK};
 use num_traits::Float;
 
-use crate::structs::IsActive;
+use crate::trade::IsActive;
 use crate::utils_cell::{price_is_real_time, qty_pnl};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct StatCollector<'a> {
     pub symbol: String,
     pub cells: Vec<TradeCell>,

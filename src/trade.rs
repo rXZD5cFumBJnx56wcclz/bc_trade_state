@@ -29,18 +29,20 @@ impl StepCell for TradeCell {
     ) {
         self.src = src.to_vec();
         self.src_l = src_l.to_vec();
-        for order in orders {
+        for mut order in orders {
             // recursive iteration is not required, as no such orders will be created
-            for sl in order.sl.iter().cloned() {
-                self.trigger_orders
-                    .borrow_mut()
-                    .insert(sl.order_link_id.clone(), sl);
-            }
-            for tp in order.tp.iter().cloned() {
-                self.trigger_orders
-                    .borrow_mut()
-                    .insert(tp.order_link_id.clone(), tp);
-            }
+            self.trigger_orders.borrow_mut().extend(
+                order
+                    .sl
+                    .drain(0..order.sl.len())
+                    .map(|v| (v.order_link_id.clone(), v)),
+            );
+            self.trigger_orders.borrow_mut().extend(
+                order
+                    .tp
+                    .drain(0..order.tp.len())
+                    .map(|v| (v.order_link_id.clone(), v)),
+            );
             if order.is_trigger() {
                 self.trigger_orders
                     .borrow_mut()

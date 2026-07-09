@@ -4,10 +4,12 @@ pub mod prelude {
     pub use std::error::Error;
     pub use std::sync::LazyLock;
 
-    pub use crate::structs::StepCell;
+    pub use crate::trade::StepCell;
     pub use crate::utils_cell::*;
     pub use bc_pack_indicators::FUNCS_EXTRACT_ARGS as FA_I;
     pub use bc_pack_orders_collectors::FUNCS_EXTRACT_ARGS as FA_O;
+    pub use bc_pack_signals_ready::FUNCS_EXTRACT_ARGS as FA_R;
+    pub use bc_pack_signals_train::FUNCS_EXTRACT_ARGS as FA_T;
     pub use bc_utils_lg::statics::prices::*;
     pub use bc_utils_lg::structs::settings::*;
     pub use bc_utils_lg::types::maps::*;
@@ -122,7 +124,7 @@ pub mod prelude {
             "mm_1".to_string(),
             SETTINGS_SIGNAL {
                 key: "mm".to_string(),
-                kwargs_usize: MAP::from_iter([("window".to_string(), 49)]),
+                kwargs_usize: MAP::from_iter([("window".to_string(), 3)]),
                 used_src: vec![SETTINGS_USED_SRC { index: 1, ..Default::default() }],
                 ..Default::default()
             },
@@ -196,6 +198,16 @@ pub mod prelude {
                 "rsi_1".to_string(),
                 "rsi_2".to_string(),
             )],
+            create_tp_sl_orders: SETTINGS_CREATE_TP_SL_ORDERS {
+                tp_market: true,
+                tp_limit: true,
+                tp_trigger_market: true,
+                tp_trigger_limit: true,
+                sl_market: true,
+                sl_limit: true,
+                sl_trigger_market: true,
+                sl_trigger_limit: true,
+            },
             ..Default::default()
         },
         indications_stat_values: SETTINGS_INDS::from_iter([(

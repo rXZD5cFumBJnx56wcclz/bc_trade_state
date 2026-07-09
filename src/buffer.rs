@@ -3,7 +3,7 @@ use std::{
     slice::SliceIndex,
 };
 
-use bc_utils::other::{roll_slice1, transpose};
+use bc_utils::other::{roll_slice1, transpose, transpose_set};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Buffer(pub Vec<Vec<f64>>);
@@ -53,6 +53,9 @@ impl Buffer {
     }
     pub fn transpose(self) -> Self {
         Self(transpose(self.0))
+    }
+    pub fn transpose_set(&mut self) {
+        transpose_set(&mut self.0);
     }
 }
 
