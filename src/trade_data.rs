@@ -145,7 +145,7 @@ impl<'a, 'b> TradeData<'a, 'b> {
     ) {
         buffer.transpose_set();
         let indications = self.indicators_gateway.indications_series(&buffer);
-        let signals_ready = &self
+        let signals_ready = self
             .signals_ready_gateway
             .signals_series(&indications, &buffer);
         buffer.transpose_set();
@@ -154,7 +154,7 @@ impl<'a, 'b> TradeData<'a, 'b> {
             self.cell.borrow().borrow(),
             self.symbol,
             &indications,
-            signals_ready,
+            &signals_ready,
             buffer.as_slice(),
         );
         dbg!(&orders);
@@ -164,8 +164,17 @@ impl<'a, 'b> TradeData<'a, 'b> {
             orders,
             &self.as_ref().get_ref().s.trade,
             &self.as_ref().get_ref().orders_collectors_gateway,
-            stat_collector,
         );
+        if let Some(st) = stat_collector {
+            // fix train signals
+            st.push(
+                self.cell.borrow().clone(),
+                indications,
+                signals_ready,
+                Default::default(),
+            );
+        }
+        self.as_ref().get_ref().cell.borrow_mut().clear();
     }
     pub fn update_bf(
         self: &Pin<Box<Self>>,
@@ -210,7 +219,7 @@ impl<'a> AfterTradeData<'a> {
     ) -> Pin<Box<Self>> {
         let mut res = Box::pin(Self {
             indicators_values: Indicators::new(&s.indications_stat_values, fa, src),
-            indicators_columns: Indicators::new(&s.indications_stat_values, fa, src),
+            indicators_columns: Indicators::new(&s.indications_stat_columns, fa, src),
             indicators_gateway_values: IndicatorsGateway {
                 indicators: ptr::null(),
                 settings: &s.indications_stat_values,
@@ -229,22 +238,22 @@ impl<'a> AfterTradeData<'a> {
     pub fn to_stat_values(
         &self,
         data: &[Vec<f64>],
-    ) -> MAP<String, f64> {
-        self.indicators_gateway_values
-            .indications_series(data)
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v))
-            .collect()
+    ) -> MAP<&'a str, f64> {
+        self.indicators_gateway_values.indications_series(data)
     }
     pub fn to_stat_columns(
         &self,
         data: &[Vec<f64>],
-    ) -> MAP<String, Vec<f64>> {
-        self.indicators_gateway_columns
-            .indications_vec(data)
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v))
-            .collect()
+    ) -> MAP<&'a str, Vec<f64>> {
+        self.indicators_gateway_columns.indications_vec(data)
+    }
+    pub fn to_all(
+        s: &'a SETTINGS,
+        src: &[Vec<f64>],
+        fa: &FA<SETTINGS_IND, Box<dyn Indicator>>,
+    ) -> (MAP<&'a str, f64>, MAP<&'a str, Vec<f64>>) {
+        let bind = AfterTradeData::new(s, src, fa);
+        (bind.to_stat_values(src), bind.to_stat_columns(src))
     }
 }
 
@@ -298,7 +307,6 @@ mod tests {
             orders,
             &res.as_ref().get_ref().s.trade,
             &res.as_ref().get_ref().orders_collectors_gateway,
-            None,
         );
         let td_ref = td.as_ref().get_ref();
         let res_ref = res.as_ref().get_ref();

@@ -1,7 +1,8 @@
 use std::cell::Ref;
 use std::ops::Deref;
 
-use bc_utils::other::transpose;
+use bc_utils::other::{transpose, transpose_map_from_vec};
+use bc_utils_lg::structs::signals::Signal;
 use bc_utils_lg::structs::trade::{Position, TradeCell};
 use bc_utils_lg::types::maps::MAP;
 use bc_utils_lg::{structs::settings::SETTINGS_TRADE, types::maps::MAP_LINK};
@@ -14,6 +15,9 @@ use crate::utils_cell::{price_is_real_time, qty_pnl};
 pub struct StatCollector<'a> {
     pub symbol: String,
     pub cells: Vec<TradeCell>,
+    pub ind: Vec<MAP<&'a str, f64>>,
+    pub signals_ready: Vec<MAP<&'a str, Signal>>,
+    pub signals_train: Vec<MAP<&'a str, f64>>,
     s: &'a SETTINGS_TRADE,
 }
 
@@ -22,13 +26,26 @@ impl<'a> StatCollector<'a> {
         symbol: String,
         s: &'a SETTINGS_TRADE,
     ) -> Self {
-        Self { symbol, cells: Vec::new(), s }
+        Self {
+            symbol,
+            cells: Vec::new(),
+            s,
+            ind: Default::default(),
+            signals_ready: Default::default(),
+            signals_train: Default::default(),
+        }
     }
     pub fn push(
         &mut self,
         cell: TradeCell,
+        ind: MAP<&'a str, f64>,
+        signals_ready: MAP<&'a str, Signal>,
+        signals_train: MAP<&'a str, f64>,
     ) {
         self.cells.push(cell);
+        self.ind.push(ind);
+        self.signals_ready.push(signals_ready);
+        self.signals_train.push(signals_train);
     }
 }
 
@@ -190,47 +207,41 @@ impl StatCollector<'_> {
             self.to_entry_and_exit(),
         ])
     }
-    pub fn to_data(&self) -> StatData {
+    pub fn to_src(&self) -> Vec<Vec<f64>> {
+        self.cells.iter().map(|c| c.src.clone()).collect()
+    }
+    pub fn to_ind(&self) -> MAP<&str, Vec<f64>> {
+        transpose_map_from_vec(&self.ind)
+    }
+    pub fn to_signals_ready(&self) -> Vec<MAP<&str, Signal>> {
+        self.signals_ready.clone()
+    }
+    pub fn to_signals_train(&self) -> Vec<MAP<&str, f64>> {
+        self.signals_train.clone()
+    }
+    pub fn to_data(&self) -> StatData<'static> {
         StatData(vec![
             MAP_LINK::from_iter([
                 (
-                    "time".to_string(),
+                    "time",
                     (0..self.cells.len())
                         .map(|v| v as f64)
                         .collect::<Vec<f64>>(),
                 ),
+                ("open", self.into_iter().map(|v| v.src[1]).collect()),
+                ("high", self.into_iter().map(|v| v.src[2]).collect()),
+                ("low", self.into_iter().map(|v| v.src[3]).collect()),
+                ("close", self.into_iter().map(|v| v.src[4]).collect()),
+                ("volume", self.into_iter().map(|v| v.src[5]).collect()),
+                ("turnover", self.into_iter().map(|v| v.src[6]).collect()),
+                ("capital", self.to_capital()),
+                ("entry", self.to_entry()),
+                ("exit", self.to_exit()),
                 (
-                    "open".to_string(),
-                    self.into_iter().map(|v| v.src[1]).collect(),
-                ),
-                (
-                    "high".to_string(),
-                    self.into_iter().map(|v| v.src[2]).collect(),
-                ),
-                (
-                    "low".to_string(),
-                    self.into_iter().map(|v| v.src[3]).collect(),
-                ),
-                (
-                    "close".to_string(),
-                    self.into_iter().map(|v| v.src[4]).collect(),
-                ),
-                (
-                    "volume".to_string(),
-                    self.into_iter().map(|v| v.src[5]).collect(),
-                ),
-                (
-                    "turnover".to_string(),
-                    self.into_iter().map(|v| v.src[6]).collect(),
-                ),
-                ("capital".to_string(), self.to_capital()),
-                ("entry".to_string(), self.to_entry()),
-                ("exit".to_string(), self.to_exit()),
-                (
-                    "pnl".to_string(),
+                    "pnl",
                     StatCollector::to_all(&[self.to_pnl(), self.to_exit()]),
                 ),
-                ("qty".to_string(), self.to_value_positions(|v| v.qty)),
+                ("qty", self.to_value_positions(|v| v.qty)),
             ]),
             {
                 let mut bind = transpose(
@@ -242,8 +253,8 @@ impl StatCollector<'_> {
                 );
                 if !bind.is_empty() {
                     MAP_LINK::from_iter([
-                        ("time".to_string(), bind.remove(0)),
-                        ("positions_entry_exit".to_string(), bind.remove(0)),
+                        ("time", bind.remove(0)),
+                        ("positions_entry_exit", bind.remove(0)),
                     ])
                 } else {
                     Default::default()
@@ -254,9 +265,9 @@ impl StatCollector<'_> {
 }
 
 #[derive(PartialEq, Debug, Default)]
-pub struct StatData(pub Vec<MAP_LINK<String, Vec<f64>>>);
+pub struct StatData<'a>(pub Vec<MAP_LINK<&'a str, Vec<f64>>>);
 
-impl StatData {
+impl StatData<'_> {
     pub fn to_vec(&self) -> Vec<Vec<Vec<f64>>> {
         self.0
             .iter()
@@ -265,8 +276,8 @@ impl StatData {
     }
 }
 
-impl Deref for StatData {
-    type Target = Vec<MAP_LINK<String, Vec<f64>>>;
+impl<'a> Deref for StatData<'a> {
+    type Target = Vec<MAP_LINK<&'a str, Vec<f64>>>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -530,42 +541,40 @@ mod tests {
 
     #[test]
     fn to_data_res_1() {
+        let bind = ST();
         assert_eq_pr!(
             StatData(vec![
                 MAP_LINK::from_iter([
-                    ("time".to_string(), vec![0., 1.,]),
-                    ("open".to_string(), OPEN[48..].to_vec()),
-                    ("high".to_string(), HIGH[48..].to_vec()),
-                    ("low".to_string(), LOW[48..].to_vec()),
-                    ("close".to_string(), CLOSE[48..].to_vec()),
-                    ("volume".to_string(), VOLUME[48..].to_vec()),
-                    ("turnover".to_string(), TURNOVER[48..].to_vec()),
-                    ("capital".to_string(), ST().to_capital()),
-                    ("entry".to_string(), vec![SRC_EL1[1], 0.,]),
-                    ("exit".to_string(), vec![0., SRC_EL[1],]),
+                    ("time", vec![0., 1.,]),
+                    ("open", OPEN[48..].to_vec()),
+                    ("high", HIGH[48..].to_vec()),
+                    ("low", LOW[48..].to_vec()),
+                    ("close", CLOSE[48..].to_vec()),
+                    ("volume", VOLUME[48..].to_vec()),
+                    ("turnover", TURNOVER[48..].to_vec()),
+                    ("capital", ST().to_capital()),
+                    ("entry", vec![SRC_EL1[1], 0.,]),
+                    ("exit", vec![0., SRC_EL[1],]),
                     (
-                        "pnl".to_string(),
+                        "pnl",
                         nz_coll::<Vec<_>, _, _>(
                             &StatCollector::to_all(&[ST().to_pnl(), ST().to_exit(),]),
                             0.
                         ),
                     ),
-                    ("qty".to_string(), ST().to_value_positions(|v| v.qty)),
+                    ("qty", ST().to_value_positions(|v| v.qty)),
                 ]),
                 MAP_LINK::from_iter([
-                    ("time".to_string(), vec![0., 1.,]),
-                    (
-                        "positions_entry_exit".to_string(),
-                        vec![SRC_EL1[1], SRC_EL[1]]
-                    )
+                    ("time", vec![0., 1.,]),
+                    ("positions_entry_exit", vec![SRC_EL1[1], SRC_EL[1]])
                 ])
             ]),
             {
-                let mut bind = ST().to_data();
-                bind.0[0]["entry"] = nz_coll::<Vec<_>, _, _>(&bind.0[0]["entry"], 0.);
-                bind.0[0]["exit"] = nz_coll::<Vec<_>, _, _>(&bind.0[0]["exit"], 0.);
-                bind.0[0]["pnl"] = nz_coll::<Vec<_>, _, _>(&bind.0[0]["pnl"], 0.);
-                bind
+                let mut bind_1 = bind.to_data();
+                bind_1.0[0]["entry"] = nz_coll::<Vec<_>, _, _>(&bind_1.0[0]["entry"], 0.);
+                bind_1.0[0]["exit"] = nz_coll::<Vec<_>, _, _>(&bind_1.0[0]["exit"], 0.);
+                bind_1.0[0]["pnl"] = nz_coll::<Vec<_>, _, _>(&bind_1.0[0]["pnl"], 0.);
+                bind_1
             }
         )
     }

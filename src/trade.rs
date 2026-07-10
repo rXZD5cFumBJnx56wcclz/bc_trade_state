@@ -1,6 +1,5 @@
 use bc_utils_lg::structs::{settings::SETTINGS_TRADE, trade::*};
 
-use crate::statistics::StatCollector;
 use crate::utils_cell::*;
 use bc_orders_collectors_gw::gw::OrdersCollectorsGateway;
 
@@ -13,8 +12,8 @@ pub trait StepCell {
         orders: Vec<Order>,
         settings: &SETTINGS_TRADE,
         order_collector_gw: &OrdersCollectorsGateway,
-        stat_collector: Option<&mut StatCollector>,
     );
+    fn clear(&mut self);
 }
 
 impl StepCell for TradeCell {
@@ -25,7 +24,6 @@ impl StepCell for TradeCell {
         orders: Vec<Order>,
         settings: &SETTINGS_TRADE,
         order_collector_gw: &OrdersCollectorsGateway,
-        stat_collector: Option<&mut StatCollector>,
     ) {
         self.src = src.to_vec();
         self.src_l = src_l.to_vec();
@@ -67,9 +65,8 @@ impl StepCell for TradeCell {
             modify_positions_or_not(settings, self, limit_order);
         }
         order_collector_gw.collect_orders(&self);
-        if let Some(stat_collector) = stat_collector {
-            stat_collector.push(self.clone());
-        }
+    }
+    fn clear(&mut self) {
         self.market_orders.borrow_mut().clear();
         self.trigger_orders.borrow_mut().retain(|_, v| v.is_active);
         self.limit_orders.borrow_mut().retain(|_, v| v.is_active);
@@ -205,8 +202,8 @@ mod tests {
             )],
             &S.trade,
             &orders_collectors_gw,
-            None,
         );
+        cell.clear();
         let mut res = TradeCell::new(
             S.trade.capital - commission_market - qty_market,
             SRC_EL_L2_.to_vec(),
@@ -229,8 +226,8 @@ mod tests {
             Default::default(),
             &S.trade,
             &orders_collectors_gw,
-            None,
         );
+        cell.clear();
         res.positions
             .borrow_mut()
             .entry("1".to_string())
@@ -259,8 +256,8 @@ mod tests {
             Default::default(),
             &S.trade,
             &orders_collectors_gw,
-            None,
         );
+        cell.clear();
         res.trigger_orders
             .borrow_mut()
             .remove(triggers[1].order_link_id.as_str());
@@ -289,8 +286,8 @@ mod tests {
             Default::default(),
             &S.trade,
             &orders_collectors_gw,
-            None,
         );
+        cell.clear();
         res.trigger_orders
             .borrow_mut()
             .remove(triggers[2].order_link_id.as_str());

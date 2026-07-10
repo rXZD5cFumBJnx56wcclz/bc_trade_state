@@ -76,18 +76,22 @@ mod tests {
 
     #[test]
     fn backtest_res_1() {
-        // assert_eq_pr!(
-        //     backtest(
-        //         "".to_string(),
-        //         &S,
-        //         SRC.clone(),
-        //         get_w_max(&S.indications, &FA_I()),
-        //         &FA_I(),
-        //         &FA_R(),
-        //         &FA_T(),
-        //         &FA_O()
-        //     ).cells.last().unwrap().capital,
-        //     StatCollector::new("".to_string(), &S.trade).cells.last().unwrap_or(&TradeCell::default()).capital
-        // );
+        assert_eq_pr!(
+            backtest(
+                "".to_string(),
+                &S,
+                SRC.clone(),
+                get_w_max(&S.indications, &FA_I()),
+                &FA_I(),
+                &FA_R(),
+                &FA_T(),
+                &FA_O()
+            )
+            .cells
+            .last()
+            .unwrap()
+            .src,
+            SRC_EL.to_vec(),
+        );
     }
 }

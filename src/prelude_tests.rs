@@ -33,7 +33,7 @@ pub mod prelude {
                     kwargs_usize: MAP::from_iter([("window".to_string(), 2)]),
                     kwargs_f64: MAP::default(),
                     kwargs_string: MAP::default(),
-                    used_src: vec![SETTINGS_USED_SRC { index: 1, sub_from_last_i: 0 }],
+                    used_src: vec![SETTINGS_USED_STRING_USIZE { index: 1, sub_from_last_i: 0 }],
                     used_ind: vec![],
                     procedure_used: vec![],
                 },
@@ -45,7 +45,7 @@ pub mod prelude {
                     kwargs_usize: MAP::from_iter([("window".to_string(), 3)]),
                     kwargs_f64: MAP::default(),
                     kwargs_string: MAP::default(),
-                    used_src: vec![SETTINGS_USED_SRC { index: 1, sub_from_last_i: 0 }],
+                    used_src: vec![SETTINGS_USED_STRING_USIZE { index: 1, sub_from_last_i: 0 }],
                     used_ind: vec![],
                     procedure_used: vec![],
                 },
@@ -70,8 +70,8 @@ pub mod prelude {
                     kwargs_f64: MAP::default(),
                     kwargs_string: MAP::default(),
                     used_src: vec![
-                        SETTINGS_USED_SRC { index: 1, sub_from_last_i: 0 },
-                        SETTINGS_USED_SRC { index: 4, sub_from_last_i: 2 },
+                        SETTINGS_USED_STRING_USIZE { index: 1, sub_from_last_i: 0 },
+                        SETTINGS_USED_STRING_USIZE { index: 4, sub_from_last_i: 2 },
                     ],
                     used_ind: vec!["rma_1".to_string()],
                     procedure_used: vec![],
@@ -106,7 +106,7 @@ pub mod prelude {
                 "trend_ma_1".to_string(),
                 SETTINGS_IND {
                     key: "trend_ma".to_string(),
-                    used_src: vec![SETTINGS_USED_SRC { index: 1, sub_from_last_i: 0 }],
+                    used_src: vec![SETTINGS_USED_STRING_USIZE { index: 1, sub_from_last_i: 0 }],
                     ..Default::default()
                 },
             ),
@@ -115,7 +115,7 @@ pub mod prelude {
                 SETTINGS_IND {
                     key: "repeat".to_string(),
                     kwargs_f64: MAP::from_iter([("value".to_string(), 1.0)]),
-                    used_src: vec![SETTINGS_USED_SRC { index: 1, sub_from_last_i: 0 }],
+                    used_src: vec![SETTINGS_USED_STRING_USIZE { index: 1, sub_from_last_i: 0 }],
                     ..Default::default()
                 },
             ),
@@ -125,7 +125,7 @@ pub mod prelude {
             SETTINGS_SIGNAL {
                 key: "mm".to_string(),
                 kwargs_usize: MAP::from_iter([("window".to_string(), 3)]),
-                used_src: vec![SETTINGS_USED_SRC { index: 1, ..Default::default() }],
+                used_src: vec![SETTINGS_USED_STRING_USIZE { index: 1, ..Default::default() }],
                 ..Default::default()
             },
         )]),
@@ -159,9 +159,9 @@ pub mod prelude {
                 SETTINGS_SIGNAL {
                     key: "th".to_string(),
                     used_src: vec![
-                        SETTINGS_USED_SRC { index: 1, ..Default::default() },
-                        SETTINGS_USED_SRC { index: 2, ..Default::default() },
-                        SETTINGS_USED_SRC { index: 3, ..Default::default() },
+                        SETTINGS_USED_STRING_USIZE { index: 1, ..Default::default() },
+                        SETTINGS_USED_STRING_USIZE { index: 2, ..Default::default() },
+                        SETTINGS_USED_STRING_USIZE { index: 3, ..Default::default() },
                     ],
                     kwargs_f64: MAP::from_iter([
                         ("th_min".to_string(), 0.0001),
@@ -214,7 +214,7 @@ pub mod prelude {
             "profit_factor_1".to_string(),
             SETTINGS_IND {
                 key: "profit_factor".to_string(),
-                used_src: vec![SETTINGS_USED_SRC { index: 10, ..Default::default() }],
+                used_src: vec![SETTINGS_USED_STRING_USIZE { index: 10, ..Default::default() }],
                 ..Default::default()
             },
         )]),
