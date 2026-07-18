@@ -1,24 +1,10 @@
 [package]
-name = "bc_trade_simulate"
+name = "bc_trade_state"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bc_utils = {path = "../bc_utils"}
 bc_utils_lg = {path = "../bc_utils_lg"}
-bc_indicators = {path = "../bc_indicators"}
-bc_indicators_gw = {path = "../bc_indicators_gw"}
-bc_signals = {path = "../bc_signals"}
-bc_signals_gw = {path = "../bc_signals_gw"}
-bc_orders_collectors = {path = "../bc_orders_collectors"}
-bc_orders_collectors_gw = {path = "../bc_orders_collectors_gw"}
-bc_pack_orders_collectors = {path = "../../../bc_pack_orders_collectors"}
-bc_pack_indicators = {path = "../../../bc_pack_indicators"}
-bc_pack_signals_ready = {path = "../../../bc_pack_signals_ready"}
-bc_pack_signals_train = {path = "../../../bc_pack_signals_train"}
-
-num-traits = "0.2.19"
-uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 criterion = {version ="0.3.5", features = ["html_reports"]}
