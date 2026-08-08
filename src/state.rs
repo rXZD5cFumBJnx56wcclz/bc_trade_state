@@ -4,24 +4,14 @@ use bc_utils_lg::{structs::trade::*, types::maps::MAP};
 
 use crate::{core::*, utils::*};
 
-pub trait StepCell<'a> {
-    fn step(
-        &mut self,
-        orders: MAP<&'a str, Option<&(Order, bool, Option<Trigger>)>>,
-    );
-    fn execute(
-        &mut self,
-        src: &[f64],
-        src_l: &[f64],
-    ) -> Result<(), Box<dyn Error>>;
+pub trait StepState<'a, 'b> {
+    fn step(&mut self, orders: MAP<&'a str, Option<&'b (Order, bool, Option<Trigger>)>>);
+    fn execute(&mut self, src: &[f64], src_l: &[f64]) -> Result<(), Box<dyn Error>>;
     fn clear(&mut self);
 }
 
-impl<'a> StepCell<'a> for TradeState<'a> {
-    fn step(
-        &mut self,
-        orders: MAP<&'a str, Option<&(Order, bool, Option<Trigger>)>>,
-    ) {
+impl<'a, 'b> StepState<'a, 'b> for TradeState<'a> {
+    fn step(&mut self, orders: MAP<&'a str, Option<&'b (Order, bool, Option<Trigger>)>>) {
         for (key, order_wrap) in orders {
             if let Some((order, include_in_storage, trigger)) = order_wrap {
                 if *include_in_storage {
@@ -34,13 +24,7 @@ impl<'a> StepCell<'a> for TradeState<'a> {
             }
         }
     }
-    fn execute(
-        &mut self,
-        src: &[f64],
-        src_l: &[f64],
-    ) -> Result<(), Box<dyn Error>> {
-        self.src = src.to_vec();
-        self.src_l = src_l.to_vec();
+    fn execute(&mut self, src: &[f64], src_l: &[f64]) -> Result<(), Box<dyn Error>> {
         self.orders.borrow_mut().extend(
             self.orders_storage
                 .borrow_mut()
@@ -81,11 +65,14 @@ mod tests {
 
     #[test]
     fn step_res_1() {
-        let mut t = TradeState::new(100., vec![1.9; 5], vec![1.89; 5]);
+        let mut t = TradeState::new(100.);
         t.step(MAP::from_iter([(
             "order_creator_1",
             Some(&(
-                Order { type_: "market".to_string(), ..Default::default() },
+                Order {
+                    type_: "market".to_string(),
+                    ..Default::default()
+                },
                 false,
                 None,
             )),
@@ -94,11 +81,12 @@ mod tests {
             t,
             TradeState {
                 capital: 100.,
-                src: t.src.clone(),
-                src_l: t.src_l.clone(),
                 orders: RefCell::new(MAP::from_iter([(
                     "order_creator_1",
-                    Order { type_: "market".to_string(), ..Default::default() }
+                    Order {
+                        type_: "market".to_string(),
+                        ..Default::default()
+                    }
                 )])),
                 ..Default::default()
             }
@@ -109,8 +97,6 @@ mod tests {
     fn execute_res_1() {
         let mut t = TradeState {
             capital: 100.,
-            src: vec![1.9; 5],
-            src_l: vec![1.89; 5],
             orders: RefCell::new(MAP::from_iter([(
                 "order_creator_1",
                 Order {
@@ -130,8 +116,6 @@ mod tests {
             t,
             TradeState {
                 capital: 100.0 - 10. - 10. * 0.001,
-                src: vec![2.; 5],
-                src_l: vec![1.9; 5],
                 positions: RefCell::new(MAP::from_iter([(
                     1,
                     Position {
@@ -166,18 +150,27 @@ mod tests {
         let mut t = TradeState {
             orders: RefCell::new(MAP::from_iter([(
                 "1",
-                Order { is_active: false, ..Default::default() },
+                Order {
+                    is_active: false,
+                    ..Default::default()
+                },
             )])),
             orders_storage: RefCell::new(MAP::from_iter([(
                 "1",
                 (
-                    Order { is_active: false, ..Default::default() },
+                    Order {
+                        is_active: false,
+                        ..Default::default()
+                    },
                     Default::default(),
                 ),
             )])),
             positions: RefCell::new(MAP::from_iter([(
                 1,
-                Position { is_active: false, ..Default::default() },
+                Position {
+                    is_active: false,
+                    ..Default::default()
+                },
             )])),
             ..Default::default()
         };

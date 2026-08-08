@@ -3,11 +3,7 @@ use std::error::Error;
 use crate::prelude::*;
 use crate::utils::{pnl, price_is_crossed};
 
-pub(crate) fn is_executable(
-    order: &Order,
-    src: &[f64],
-    src_l: &[f64],
-) -> bool {
+pub(crate) fn is_executable(order: &Order, src: &[f64], src_l: &[f64]) -> bool {
     order.is_active
         && (order.price.is_none()
             || price_is_crossed(order.price.unwrap(), src, src_l, &order.type_price_cross))
@@ -95,7 +91,10 @@ mod tests {
     fn is_executable_res_2() {
         assert_eq_pr!(
             is_executable(
-                &Order { type_: "market".to_string(), ..Default::default() },
+                &Order {
+                    type_: "market".to_string(),
+                    ..Default::default()
+                },
                 &[1.91; 5],
                 &[1.89; 5],
             ),
@@ -125,10 +124,10 @@ mod tests {
             leverage: 2.,
             ..Default::default()
         };
+        let src = vec![1.89; 5];
+        let _src_l = vec![1.88; 5];
         let mut t = TradeState {
             capital: 100.,
-            src: vec![1.89; 5],
-            src_l: vec![1.88; 5],
             positions: positions.clone(),
             ..Default::default()
         };
@@ -136,7 +135,7 @@ mod tests {
             &mut t.capital,
             t.positions.borrow_mut().get_mut(&1).unwrap(),
             &mut order,
-            &t.src,
+            &src,
         )
         .unwrap();
         assert_eq_pr!(order.is_active, false);
@@ -144,14 +143,12 @@ mod tests {
             t,
             TradeState {
                 capital: 100. - order.qty - order.commission,
-                src: t.src.clone(),
-                src_l: t.src_l.clone(),
                 positions: {
                     let positions_clone = positions.clone();
                     let mut positions_mut = positions_clone.borrow_mut();
                     let bind = positions_mut.get_mut(&1).unwrap();
                     bind.qty += order.qty;
-                    bind.avg_open_price = (bind.avg_open_price + t.src[4]) / 2.;
+                    bind.avg_open_price = (bind.avg_open_price + src[4]) / 2.;
                     drop(positions_mut);
                     positions_clone
                 },

@@ -1,7 +1,4 @@
-fn price_type(
-    src: &[f64],
-    type_: &str,
-) -> f64 {
+fn price_type(src: &[f64], type_: &str) -> f64 {
     match type_ {
         "index" => src[7],
         "mark" => src[8],
@@ -9,12 +6,7 @@ fn price_type(
     }
 }
 
-pub fn price_is_crossed(
-    price: f64,
-    src: &[f64],
-    src_l: &[f64],
-    type_price_crossed: &str,
-) -> bool {
+pub fn price_is_crossed(price: f64, src: &[f64], src_l: &[f64], type_price_crossed: &str) -> bool {
     price <= price_type(src, type_price_crossed) && price >= price_type(src_l, type_price_crossed)
 }
 
@@ -33,20 +25,9 @@ pub fn price_is_crossed_direction(
     }
 }
 
-pub fn pnl(
-    qty: f64,
-    avg_price: f64,
-    last_price: f64,
-    leverage: f64,
-    side: &str,
-) -> (f64, f64) {
-    let percent = (last_price - avg_price) / avg_price
-        * leverage
-        * if side == "buy" {
-            1.
-        } else {
-            -1.
-        };
+pub fn pnl(qty: f64, avg_price: f64, last_price: f64, leverage: f64, side: &str) -> (f64, f64) {
+    let percent =
+        (last_price - avg_price) / avg_price * leverage * if side == "buy" { 1. } else { -1. };
     (percent, percent * qty)
 }
 
@@ -59,7 +40,9 @@ mod tests {
     fn price_type_res_1() {
         assert_eq_pr!(
             price_type(
-                &[1., 1.9, 1.92, 1.89, 1.91, 11111., 111111., 1.910001, 1.910002,],
+                &[
+                    1., 1.9, 1.92, 1.89, 1.91, 11111., 111111., 1.910001, 1.910002,
+                ],
                 "last"
             ),
             1.91
