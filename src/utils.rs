@@ -1,4 +1,4 @@
-fn price_type(src: &[f64], type_: &str) -> f64 {
+pub fn price_type(src: &[f64], type_: &str) -> f64 {
     match type_ {
         "index" => src[7],
         "mark" => src[8],
@@ -25,16 +25,10 @@ pub fn price_is_crossed_direction(
     }
 }
 
-pub fn pnl(qty: f64, avg_price: f64, last_price: f64, leverage: f64, side: &str) -> (f64, f64) {
-    let percent =
-        (last_price - avg_price) / avg_price * leverage * if side == "buy" { 1. } else { -1. };
-    (percent, percent * qty)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude_tests::prelude::*;
+    use bc_test_kit::prelude::*;
 
     #[test]
     fn price_type_res_1() {
@@ -76,11 +70,5 @@ mod tests {
             price_is_crossed_direction(1.9, 2, &[1.89; 5], &[1.91; 5], "last"),
             true
         )
-    }
-
-    #[test]
-    fn pnl_res_1() {
-        let percent = (1.95 - 1.9) / 1.9 * 2. * -1.;
-        assert_eq_pr!(pnl(10., 1.9, 1.95, 2., "sell"), (percent, percent * 10.))
     }
 }

@@ -1,58 +1,90 @@
-use std::error::Error;
+use crate::prelude::*;
 
-use bc_utils_lg::{structs::trade::*, types::maps::MAP};
-
-use crate::{core::*, utils::*};
-
-pub trait StepState<'a, 'b> {
-    fn step(&mut self, orders: MAP<&'a str, Option<&'b (Order, bool, Option<Trigger>)>>);
-    fn execute(&mut self, src: &[f64], src_l: &[f64]) -> Result<(), Box<dyn Error>>;
-    fn clear(&mut self);
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TradeState<'a> {
+    pub capital: Capital,
+    pub orders: RefCell<MAP<&'a str, Vec<Order>>>,
+    pub orders_trigger: RefCell<MAP<&'a str, Vec<(Order, Trigger)>>>,
+    pub positions: RefCell<MAP<usize, Position>>,
 }
 
-impl<'a, 'b> StepState<'a, 'b> for TradeState<'a> {
-    fn step(&mut self, orders: MAP<&'a str, Option<&'b (Order, bool, Option<Trigger>)>>) {
-        for (key, order_wrap) in orders {
-            if let Some((order, include_in_storage, trigger)) = order_wrap {
-                if *include_in_storage {
-                    self.orders_storage
+impl<'a> TradeState<'a> {
+    pub fn step(&mut self, orders: &MAP<&'a str, (Option<&OrderWrap>, bool)>) {
+        for (key, (order_wrap, use_in_trade)) in orders {
+            if let Some(order_wrap) = order_wrap
+                && *use_in_trade
+            {
+                if order_wrap.is_trigger {
+                    let trigger = || order_wrap.trigger.as_ref().unwrap().clone();
+                    self.orders_trigger
                         .borrow_mut()
-                        .insert(key, (order.clone(), trigger.clone().unwrap()));
+                        .entry(key)
+                        .and_modify(|v| v.push((order_wrap.order.clone(), trigger())))
+                        .or_insert_with(|| vec![(order_wrap.order.clone(), trigger())]);
                 } else {
-                    self.orders.borrow_mut().insert(key, order.clone());
+                    self.orders
+                        .borrow_mut()
+                        .entry(key)
+                        .and_modify(|v| v.push(order_wrap.order.clone()))
+                        .or_insert_with(|| vec![order_wrap.order.clone()]);
                 }
             }
         }
     }
-    fn execute(&mut self, src: &[f64], src_l: &[f64]) -> Result<(), Box<dyn Error>> {
-        self.orders.borrow_mut().extend(
-            self.orders_storage
-                .borrow_mut()
-                .extract_if(|_, (_, t)| {
-                    price_is_crossed_direction(t.price, t.direction, src, src_l, &t.trigger_by)
-                })
-                .map(|(k, v)| (k, v.0))
-                .collect::<MAP<_, _>>(),
-        );
-        let mut modify_res = Ok(());
-        for order in self.orders.borrow_mut().values_mut() {
-            if is_executable(order, src, src_l) {
-                self.positions
-                    .borrow_mut()
-                    .entry(order.position_idx)
-                    .and_modify(|p| modify_res = modify(&mut self.capital, p, order, src))
-                    .or_insert(insert(order, src, &mut self.capital)?);
-                order.is_active = false;
-            }
+    pub fn triggers_to_orders(&mut self, src: &[f64], src_l: &[f64]) {
+        for (k, order) in self.orders_trigger.borrow_mut().iter_mut() {
+            self.orders.borrow_mut().entry(*k).and_modify(|v| {
+                v.extend(
+                    order
+                        .extract_if(.., |(_, t)| {
+                            price_is_crossed_direction(
+                                t.price,
+                                t.direction,
+                                src,
+                                src_l,
+                                &t.trigger_by,
+                            )
+                        })
+                        .map(|v| v.0),
+                );
+            });
         }
-        modify_res?;
-        Ok(())
     }
-    fn clear(&mut self) {
-        self.orders.borrow_mut().retain(|_, v| v.is_active);
-        self.orders_storage
-            .borrow_mut()
-            .retain(|_, v| v.0.is_active);
+    pub fn execute(
+        &mut self,
+        src: &[f64],
+        src_l: &[f64],
+    ) -> Result<MAP<&'a str, Vec<Order>>, ErrorTrade> {
+        let mut res = MAP::default();
+        for (id, orders) in self.orders.borrow_mut().iter_mut() {
+            res.insert(
+                *id,
+                orders
+                    .extract_if(.., |order| is_to_execute(order, src, src_l))
+                    .map(|mut order| {
+                        is_executable(self.capital, &order)?;
+                        let last_price = src[4];
+                        self.positions
+                            .borrow_mut()
+                            .entry(order.position_idx)
+                            .and_modify(|p| modify(&mut self.capital, p, &order, last_price))
+                            .or_insert(insert(&order, last_price, &mut self.capital));
+                        order.is_active = false;
+                        order.price = Some(last_price);
+                        Ok(order)
+                    })
+                    .collect::<Result<Vec<Order>, ErrorTrade>>()?,
+            );
+        }
+        Ok(res)
+    }
+    pub fn clear(&mut self) {
+        for orders in self.orders.borrow_mut().values_mut() {
+            orders.retain(|v| v.is_active);
+        }
+        for orders in self.orders_trigger.borrow_mut().values_mut() {
+            orders.retain(|v| v.0.is_active);
+        }
         self.positions.borrow_mut().retain(|_, v| v.is_active);
     }
 }
@@ -60,123 +92,72 @@ impl<'a, 'b> StepState<'a, 'b> for TradeState<'a> {
 #[cfg(test)]
 mod tests {
 
-    use super::*;
-    use crate::prelude_tests::prelude::*;
+    use bc_test_kit::prelude::*;
 
     #[test]
     fn step_res_1() {
-        let mut t = TradeState::new(100.);
-        t.step(MAP::from_iter([(
-            "order_creator_1",
-            Some(&(
-                Order {
-                    type_: "market".to_string(),
-                    ..Default::default()
-                },
-                false,
-                None,
-            )),
-        )]));
-        assert_eq_pr!(
-            t,
-            TradeState {
-                capital: 100.,
-                orders: RefCell::new(MAP::from_iter([(
-                    "order_creator_1",
-                    Order {
-                        type_: "market".to_string(),
-                        ..Default::default()
-                    }
-                )])),
-                ..Default::default()
-            }
-        )
+        let mut t = TRADE_STATE_EMPTY();
+        t.step(&ORDER_FILTERS_STATE());
+        assert_eq_pr!(&t, &TRADE_STATE());
+        assert_eq_pr!(t.orders_trigger.borrow()["count_3"].len(), 1);
+    }
+
+    #[test]
+    fn triggers_to_orders_res_1() {
+        let mut t = TRADE_STATE_EMPTY();
+        t.step(&ORDER_FILTERS_STATE());
+        t.triggers_to_orders(&SRC_EL, &SRC_EL1);
+        assert_eq_pr!(&t, &TRADE_STATE());
+        assert_eq_pr!(t.orders_trigger.borrow()["count_3"].len(), 1);
     }
 
     #[test]
     fn execute_res_1() {
-        let mut t = TradeState {
-            capital: 100.,
-            orders: RefCell::new(MAP::from_iter([(
-                "order_creator_1",
-                Order {
-                    type_: "market".to_string(),
-                    qty: 10.,
-                    commission: 0.001 * 10.,
-                    position_idx: 1,
-                    side: "buy".to_string(),
-                    leverage: 2.,
-                    ..Default::default()
-                },
-            )])),
-            ..Default::default()
-        };
-        t.execute(&[2.; 5], &[1.9; 5]).unwrap();
-        assert_eq_pr!(
-            t,
-            TradeState {
-                capital: 100.0 - 10. - 10. * 0.001,
-                positions: RefCell::new(MAP::from_iter([(
-                    1,
-                    Position {
-                        side: "buy".to_string(),
-                        leverage: 2.,
-                        qty: 10.,
-                        avg_open_price: 2.,
-                        position_idx: 1,
-                        ..Default::default()
-                    }
-                )])),
-                orders: RefCell::new(MAP::from_iter([(
-                    "order_creator_1",
-                    Order {
-                        type_: "market".to_string(),
-                        qty: 10.,
-                        commission: 0.001 * 10.,
-                        position_idx: 1,
-                        side: "buy".to_string(),
-                        leverage: 2.,
-                        is_active: false,
-                        ..Default::default()
-                    },
-                )])),
-                ..Default::default()
-            }
-        )
+        let mut t = TRADE_STATE();
+        t.triggers_to_orders(&SRC_EL, &SRC_EL1);
+        t.execute(&SRC_EL, &SRC_EL1).unwrap();
+        assert!(!t.positions.borrow().is_empty());
+        assert_eq_pr!(t.orders_trigger.borrow()["count_3"].len(), 1);
     }
 
     #[test]
     fn clear_res_1() {
-        let mut t = TradeState {
-            orders: RefCell::new(MAP::from_iter([(
-                "1",
-                Order {
-                    is_active: false,
-                    ..Default::default()
-                },
-            )])),
-            orders_storage: RefCell::new(MAP::from_iter([(
-                "1",
-                (
-                    Order {
-                        is_active: false,
-                        ..Default::default()
-                    },
-                    Default::default(),
-                ),
-            )])),
-            positions: RefCell::new(MAP::from_iter([(
-                1,
-                Position {
-                    is_active: false,
-                    ..Default::default()
-                },
-            )])),
-            ..Default::default()
-        };
+        let mut t = TRADE_STATE();
+        t.step(&ORDER_FILTERS_STATE());
+        t.triggers_to_orders(&SRC_EL, &SRC_EL1);
+        t.execute(&SRC_EL, &SRC_EL1).unwrap();
+        assert!(!t.positions.borrow().is_empty());
+        assert!(!t.orders.borrow().is_empty());
+        assert!(!t.orders_trigger.borrow().is_empty());
+        for v in t.positions.borrow_mut().values_mut() {
+            v.is_active = false;
+        }
+        for v in t.orders.borrow_mut().values_mut() {
+            for v in v.iter_mut() {
+                v.is_active = false;
+            }
+        }
+        for v in t.orders_trigger.borrow_mut().values_mut() {
+            for (v, _) in v.iter_mut() {
+                v.is_active = false;
+            }
+        }
         t.clear();
-        assert!(t.orders.borrow().is_empty());
-        assert!(t.orders_storage.borrow().is_empty());
         assert!(t.positions.borrow().is_empty());
+        for orders in t.orders.borrow().values() {
+            assert!(orders.is_empty());
+        }
+        for orders in t.orders_trigger.borrow().values() {
+            assert!(orders.is_empty());
+        }
+    }
+}
+
+impl TradeState<'_> {
+    pub fn new(capital: Capital) -> Self {
+        Self {
+            capital,
+            ..Self::default()
+        }
     }
 }

@@ -1,11 +1,12 @@
 [package]
 name = "bc_trade_state"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
 bc_utils_lg = {path = "../bc_utils_lg"}
+thiserror = "2"
 
 [dev-dependencies]
+bc_test_kit = {path = "../bc_test_kit"}
 criterion = {version ="0.3.5", features = ["html_reports"]}
-pretty_assertions = "1"
