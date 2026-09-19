@@ -1,15 +1,18 @@
 use crate::prelude::*;
 
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct TradeState<'a> {
-    pub capital: Capital,
-    pub orders: RefCell<MAP<&'a str, Vec<Order>>>,
-    pub orders_trigger: RefCell<MAP<&'a str, Vec<(Order, Trigger)>>>,
-    pub positions: RefCell<MAP<usize, Position>>,
+pub trait TradeStateExt<'a> {
+    fn step(&mut self, orders: &MAP<&'a str, (Option<&OrderWrap>, bool)>);
+    fn triggers_to_orders(&mut self, src: &[f64], src_l: &[f64]);
+    fn execute(
+        &mut self,
+        src: &[f64],
+        src_l: &[f64],
+    ) -> Result<MAP<&'a str, Vec<Order>>, ErrorTrade>;
+    fn clear(&mut self);
 }
 
-impl<'a> TradeState<'a> {
-    pub fn step(&mut self, orders: &MAP<&'a str, (Option<&OrderWrap>, bool)>) {
+impl<'a> TradeStateExt<'a> for TradeState<'a> {
+    fn step(&mut self, orders: &MAP<&'a str, (Option<&OrderWrap>, bool)>) {
         for (key, (order_wrap, use_in_trade)) in orders {
             if let Some(order_wrap) = order_wrap
                 && *use_in_trade
@@ -31,7 +34,7 @@ impl<'a> TradeState<'a> {
             }
         }
     }
-    pub fn triggers_to_orders(&mut self, src: &[f64], src_l: &[f64]) {
+    fn triggers_to_orders(&mut self, src: &[f64], src_l: &[f64]) {
         for (k, order) in self.orders_trigger.borrow_mut().iter_mut() {
             self.orders.borrow_mut().entry(*k).and_modify(|v| {
                 v.extend(
@@ -50,7 +53,7 @@ impl<'a> TradeState<'a> {
             });
         }
     }
-    pub fn execute(
+    fn execute(
         &mut self,
         src: &[f64],
         src_l: &[f64],
@@ -78,7 +81,7 @@ impl<'a> TradeState<'a> {
         }
         Ok(res)
     }
-    pub fn clear(&mut self) {
+    fn clear(&mut self) {
         for orders in self.orders.borrow_mut().values_mut() {
             orders.retain(|v| v.is_active);
         }
@@ -92,6 +95,9 @@ impl<'a> TradeState<'a> {
 #[cfg(test)]
 mod tests {
 
+    use super::*;
+    use crate::test_state::trade_state::*;
+    use bc_order_filters_gw::test_state::*;
     use bc_test_kit::prelude::*;
 
     #[test]
@@ -149,15 +155,6 @@ mod tests {
         }
         for orders in t.orders_trigger.borrow().values() {
             assert!(orders.is_empty());
-        }
-    }
-}
-
-impl TradeState<'_> {
-    pub fn new(capital: Capital) -> Self {
-        Self {
-            capital,
-            ..Self::default()
         }
     }
 }

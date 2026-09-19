@@ -1,12 +1,19 @@
 [package]
 name = "bc_trade_state"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 
 [dependencies]
-bc_utils_lg = {path = "../bc_utils_lg"}
+bc_utils_lg = {path = "../bc_utils_lg", features = ["test_state"]}
+bc_order_filters_gw = {path = "../bc_order_filters_gw", features = ["test_state"], optional = true}
+bc_test_kit = {path = "../bc_test_kit"}
+
 thiserror = "2"
 
 [dev-dependencies]
-bc_test_kit = {path = "../bc_test_kit"}
+bc_order_filters_gw = {path = "../bc_order_filters_gw", features = ["test_state"]}
+
 criterion = {version ="0.3.5", features = ["html_reports"]}
+
+[features]
+test_state = ["dep:bc_order_filters_gw"]
