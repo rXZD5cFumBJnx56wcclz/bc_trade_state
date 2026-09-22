@@ -1,6 +1,6 @@
 pub mod capital;
 pub mod core;
-pub mod errors;
+pub mod error;
 pub mod position;
 pub mod prelude;
 pub mod state;

@@ -9,7 +9,7 @@ pub use thiserror::Error as ThisError;
 
 pub use crate::capital::*;
 pub use crate::core::*;
-pub use crate::errors::*;
+pub use crate::error::*;
 pub use crate::position::*;
 pub use crate::state::*;
 pub use crate::utils::*;
